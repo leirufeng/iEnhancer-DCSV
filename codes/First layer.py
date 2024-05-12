@@ -187,8 +187,6 @@ if __name__ == '__main__':
             trains_label, val_label = train_label[train_index], train_label[val_index]
 
 
-            model = build_model()
-
 
             BATCH_SIZE = 30
             EPOCHS = 300
