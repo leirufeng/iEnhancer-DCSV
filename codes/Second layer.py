@@ -118,104 +118,6 @@ def show_performance(y_true, y_pred):
     return Sn, Sp, Acc, MCC
 
 
-# Define a single convolutional layer in a dense convolutional block
-def conv_factory(x, filters, dropout_rate, weight_decay=1e-4):
-    x = Activation('relu')(x)
-    x = Conv2D(filters=filters,
-               kernel_size=(3, 3),
-               kernel_initializer="he_normal",
-               padding="same",
-               use_bias=False,
-               kernel_regularizer=l2(weight_decay))(x)
-    x = Dropout(dropout_rate)(x)
-    return x
-
-
-# Defining the transition layer
-def transition(x, filters, dropout_rate, weight_decay=1e-4):
-    # x = Activation('relu')(x)
-    x = Conv2D(filters=filters,
-               kernel_size=(1, 1),
-               kernel_initializer="he_normal",
-               padding="same",
-               use_bias=False,
-               kernel_regularizer=l2(weight_decay))(x)
-    x = Dropout(dropout_rate)(x)
-    x = AveragePooling2D(pool_size=(2, 2), strides=(2, 2))(x)
-    x = BatchNormalization(axis=-1)(x)
-    return x
-
-
-# Define dense convolution blocks
-def denseblock(x, layers, filters, growth_rate, dropout_rate=None, weight_decay=1e-4):
-    list_feature_map = [x]
-    # 循环三次conv_factory部分
-    for i in range(layers):
-        x = conv_factory(x, growth_rate,
-                         dropout_rate, weight_decay)
-        list_feature_map.append(x)
-        x = Concatenate(axis=-1)(list_feature_map)
-        filters = filters + growth_rate
-    return x, filters
-
-# Building the model
-def build_model(windows=7, denseblocks=4, layers=3, filters=96,
-                growth_rate=32, dropout_rate=0.2, weight_decay=1e-4):
-    input_1 = Input(shape=(windows, 200, 1))  # Input的本质是实例化一个Keras Tensor，就是你是输入一条序列的shape大小
-
-    for i in range(denseblocks - 1):
-        # Add denseblock
-        x_1, filters_1 = denseblock(input_1, layers=layers,
-                                    filters=filters, growth_rate=growth_rate,
-                                    dropout_rate=dropout_rate, weight_decay=weight_decay)
-        # Add BatchNormalization
-        x_1 = BatchNormalization(axis=-1)(x_1)
-
-        # Add transition
-        x_1 = transition(x_1, filters=filters_1,
-                         dropout_rate=dropout_rate, weight_decay=weight_decay)
-    # The last denseblock
-    # Add denseblock
-    x_1, filters_1 = denseblock(x_1, layers=layers,
-                                filters=filters, growth_rate=growth_rate,
-                                dropout_rate=dropout_rate, weight_decay=weight_decay)
-    # Add BatchNormalization
-    x_1 = BatchNormalization(axis=-1)(x_1)
-
-    # Pooling
-    x_1 = AveragePooling2D(pool_size=(1, 12), strides=(1, 1))(x_1)
-
-    # Flatten
-    x = Flatten()(x_1)
-
-    # MLP
-    x = Dense(units=240, activation="sigmoid", use_bias=False,
-              kernel_initializer='he_normal',
-              kernel_regularizer=l2(weight_decay))(x)
-
-    x = Dropout(0.5)(x)
-
-    x = Dense(units=40, activation="sigmoid", use_bias=False,
-              kernel_initializer='he_normal',
-              kernel_regularizer=l2(weight_decay))(x)
-
-    x = Dropout(0.2)(x)
-
-    x = Dense(units=2, activation="softmax", use_bias=False,
-              kernel_initializer='he_normal',
-              kernel_regularizer=l2(weight_decay))(x)
-
-    inputs = [input_1]
-    outputs = [x]
-
-    model = Model(inputs=inputs, outputs=outputs, name="enhancer")
-
-    optimizer = Adam(lr=1e-4, epsilon=1e-8)
-
-    model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
-
-    return model
-
 
 def performance_mean(performance):
     print('Sn = %.4f ± %.4f' % (np.mean(performance[:, 0]), np.std(performance[:, 0])))
@@ -282,32 +184,10 @@ if __name__ == '__main__':
             trains, val = train[train_index], train[val_index]
             trains_label, val_label = train_label[train_index], train_label[val_index]
 
-            model = build_model()
 
             BATCH_SIZE = 30
             EPOCHS = 300
 
-            history = model.fit(x=trains, y=trains_label, validation_data=(val, val_label), epochs=EPOCHS,
-                                batch_size=BATCH_SIZE, shuffle=True,
-                                callbacks=[EarlyStopping(monitor='val_loss', patience=40, mode='auto')],
-                                verbose=1)  # callbacks回调，将数据传给history
-
-            with open('F:/py-file/leirufeng/two_enhancer/files/log_history/one_log_history.txt', 'w') as f:
-                f.write(str(history.history))
-
-            train_loss = history.history["loss"]
-            train_acc = history.history["accuracy"]
-            val_loss = history.history["val_loss"]
-            val_acc = history.history["val_accuracy"]
-
-            loss, accuracy = model.evaluate(val, val_label, verbose=1)
-
-            print('val loss:', loss)
-            print('val accuracy:', accuracy)
-
-            model.save('F:/py-file/leirufeng/two_enhancer/models/one_enhancer_model_' + str(fold_count) + '.h5')
-
-            del model
 
             model = load_model('F:/py-file/leirufeng/two_enhancer/models/one_enhancer_model_' + str(fold_count) + '.h5')
 
